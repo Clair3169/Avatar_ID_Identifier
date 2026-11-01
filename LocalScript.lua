@@ -1,5 +1,8 @@
 -- Esperamos a que el jugador, el personaje y el humanoide estén cargados
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local AvatarEditorService = game:GetService("AvatarEditorService")
+
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
@@ -10,6 +13,39 @@ local description = humanoid:GetAppliedDescription()
 if not description then
     warn("No se pudo obtener la información del avatar.")
     return
+end
+
+print("⏳ Extrayendo IDs de tu avatar, revisando el catálogo... por favor espera.")
+
+-- FUNCIÓN NUEVA: Convierte un ID de malla/asset en el ID de compra real (Bundle)
+local function getRealId(assetId)
+    if not assetId or assetId == 0 then return 0 end
+    
+    -- Método 1: Usamos game:HttpGet (Súper rápido en ejecutores para buscar en el catálogo)
+    local success, result = pcall(function()
+        local url = "https://catalog.roblox.com/v1/assets/" .. tostring(assetId) .. "/bundles"
+        local response = game:HttpGet(url)
+        local data = HttpService:JSONDecode(response)
+        if data and data.data and #data.data > 0 then
+            return data.data[1].id -- Retorna el ID del paquete real que puedes comprar
+        end
+    end)
+    
+    if success and result then return result end
+    
+    -- Método 2 (Respaldo): Si el ejecutor no soporta HttpGet, usamos la API de Roblox
+    local success2, result2 = pcall(function()
+        local pages = AvatarEditorService:GetBundlesByAssetIdAsync(assetId)
+        local currentPage = pages:GetCurrentPage()
+        if currentPage and #currentPage > 0 then
+            return currentPage[1].id
+        end
+    end)
+    
+    if success2 and result2 then return result2 end
+    
+    -- Si no es un Bundle (por ejemplo, es un accesorio clásico), devuelve el ID normal
+    return assetId
 end
 
 local output = {}
@@ -23,7 +59,6 @@ local accCount = 0
 
 for _, acc in pairs(accessories) do
     if acc.AssetId and acc.AssetId > 0 then
-        -- CORRECCIÓN: Se cambió AssetType por AccessoryType y se añadió una protección extra.
         local accName = acc.AccessoryType and acc.AccessoryType.Name or "Accesorio"
         table.insert(output, " - " .. tostring(accName) .. ": " .. tostring(acc.AssetId))
         accCount = accCount + 1
@@ -70,7 +105,10 @@ local partCount = 0
 
 for partName, assetId in pairs(bodyParts) do
     if assetId > 0 then 
-        table.insert(output, " - " .. partName .. ": " .. tostring(assetId))
+        -- AQUÍ ACTÚA EL ARREGLO: Extraemos el Bundle ID si es que pertenece a un paquete
+        local realId = getRealId(assetId)
+        local note = (realId ~= assetId) and " (ID de Tienda/Bundle)" or ""
+        table.insert(output, " - " .. partName .. ": " .. tostring(realId) .. note)
         partCount = partCount + 1
     end
 end
@@ -96,7 +134,10 @@ if humanoid.RigType == Enum.HumanoidRigType.R15 then
 
     for animName, assetId in pairs(animations) do
         if assetId > 0 then
-            table.insert(output, " - " .. animName .. ": " .. tostring(assetId))
+            -- LAS ANIMACIONES TAMBIÉN SE VENDEN COMO BUNDLE: Aplicamos el mismo arreglo
+            local realId = getRealId(assetId)
+            local note = (realId ~= assetId) and " (ID de Paquete)" or ""
+            table.insert(output, " - " .. animName .. ": " .. tostring(realId) .. note)
             animCount = animCount + 1
         end
     end
