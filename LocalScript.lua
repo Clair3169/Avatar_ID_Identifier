@@ -15,48 +15,31 @@ if not description then
     return
 end
 
-print("⏳ Extrayendo IDs de tu avatar, revisando el catálogo... por favor espera.")
+print("⏳ Extrayendo información técnica y de venta... por favor espera.")
 
--- FUNCIÓN NUEVA: Convierte un ID de malla/asset en el ID de compra real (Bundle)
-local function getRealId(assetId)
-    if not assetId or assetId == 0 then return 0 end
+-- Función para buscar el ID de venta (Bundle) a partir del ID de Asset
+local function getBundleId(assetId)
+    if not assetId or assetId == 0 then return nil end
     
-    -- Método 1: Usamos game:HttpGet (Súper rápido en ejecutores para buscar en el catálogo)
     local success, result = pcall(function()
         local url = "https://catalog.roblox.com/v1/assets/" .. tostring(assetId) .. "/bundles"
         local response = game:HttpGet(url)
         local data = HttpService:JSONDecode(response)
         if data and data.data and #data.data > 0 then
-            return data.data[1].id -- Retorna el ID del paquete real que puedes comprar
+            return data.data[1].id
         end
     end)
-    
-    if success and result then return result end
-    
-    -- Método 2 (Respaldo): Si el ejecutor no soporta HttpGet, usamos la API de Roblox
-    local success2, result2 = pcall(function()
-        local pages = AvatarEditorService:GetBundlesByAssetIdAsync(assetId)
-        local currentPage = pages:GetCurrentPage()
-        if currentPage and #currentPage > 0 then
-            return currentPage[1].id
-        end
-    end)
-    
-    if success2 and result2 then return result2 end
-    
-    -- Si no es un Bundle (por ejemplo, es un accesorio clásico), devuelve el ID normal
-    return assetId
+    return success and result or nil
 end
 
 local output = {}
 table.insert(output, "=== REPORTE DE AVATAR DE " .. player.Name .. " ===")
 table.insert(output, "")
 
--- 1. ACCESORIOS Y ROPA 3D (Layered Clothing)
+-- 1. ACCESORIOS Y ROPA 3D
 table.insert(output, "[ACCESORIOS Y ROPA 3D]")
 local accessories = description:GetAccessories(true) 
 local accCount = 0
-
 for _, acc in pairs(accessories) do
     if acc.AssetId and acc.AssetId > 0 then
         local accName = acc.AccessoryType and acc.AccessoryType.Name or "Accesorio"
@@ -64,103 +47,76 @@ for _, acc in pairs(accessories) do
         accCount = accCount + 1
     end
 end
-
-if accCount == 0 then
-    table.insert(output, " - Ninguno")
-end
+if accCount == 0 then table.insert(output, " - Ninguno") end
 table.insert(output, "")
 
--- 2. ROPA 2D (Camisas, Pantalones, Camisetas)
+-- 2. ROPA 2D
 table.insert(output, "[ROPA 2D (Classic)]")
 local has2D = false
-if description.Shirt > 0 then 
-    table.insert(output, " - Camisa (Shirt): " .. tostring(description.Shirt)) 
-    has2D = true
-end
-if description.Pants > 0 then 
-    table.insert(output, " - Pantalones (Pants): " .. tostring(description.Pants)) 
-    has2D = true
-end
-if description.GraphicTShirt > 0 then 
-    table.insert(output, " - Camiseta (T-Shirt): " .. tostring(description.GraphicTShirt)) 
-    has2D = true
-end
-
-if not has2D then
-    table.insert(output, " - Ninguna")
-end
+if description.Shirt > 0 then table.insert(output, " - Camisa: " .. tostring(description.Shirt)); has2D = true end
+if description.Pants > 0 then table.insert(output, " - Pantalones: " .. tostring(description.Pants)); has2D = true end
+if description.GraphicTShirt > 0 then table.insert(output, " - Camiseta: " .. tostring(description.GraphicTShirt)); has2D = true end
+if not has2D then table.insert(output, " - Ninguna") end
 table.insert(output, "")
 
--- 3. PAQUETE DE CUERPO Y CABEZAS 3D DINÁMICAS
+-- 3. PAQUETE DE CUERPO Y CABEZAS 3D
 table.insert(output, "[PARTES DEL CUERPO Y CABEZA]")
 local bodyParts = {
-    ["Cabeza (Head)"] = description.Head,
+    ["Cabeza"] = description.Head,
     ["Torso"] = description.Torso,
-    ["Brazo Izquierdo (LeftArm)"] = description.LeftArm,
-    ["Brazo Derecho (RightArm)"] = description.RightArm,
-    ["Pierna Izquierda (LeftLeg)"] = description.LeftLeg,
-    ["Pierna Derecha (RightLeg)"] = description.RightLeg
+    ["Brazo Izquierdo"] = description.LeftArm,
+    ["Brazo Derecho"] = description.BrazoDerecho, -- Roblox usa LeftArm/RightArm internamente, mantenemos la lógica
+    ["Pierna Izquierda"] = description.LeftLeg,
+    ["Pierna Derecha"] = description.RightLeg
 }
-local partCount = 0
+-- Nota: Corregí el nombre de la variable para el brazo derecho a RightArm para que sea preciso
+bodyParts = {
+    ["Cabeza"] = description.Head,
+    ["Torso"] = description.Torso,
+    ["Brazo Izq"] = description.LeftArm,
+    ["Brazo Der"] = description.RightArm,
+    ["Pierna Izq"] = description.LeftLeg,
+    ["Pierna Der"] = description.RightLeg
+}
 
+local partCount = 0
 for partName, assetId in pairs(bodyParts) do
     if assetId > 0 then 
-        -- AQUÍ ACTÚA EL ARREGLO: Extraemos el Bundle ID si es que pertenece a un paquete
-        local realId = getRealId(assetId)
-        local note = (realId ~= assetId) and " (ID de Tienda/Bundle)" or ""
-        table.insert(output, " - " .. partName .. ": " .. tostring(realId) .. note)
+        local bundleId = getBundleId(assetId)
+        local displayStr = " - " .. partName .. ": Asset ID [" .. tostring(assetId) .. "]"
+        if bundleId then
+            displayStr = displayStr .. " | Bundle ID [" .. tostring(bundleId) .. "]"
+        end
+        table.insert(output, displayStr)
         partCount = partCount + 1
     end
 end
-
-if partCount == 0 then
-    table.insert(output, " - Default de Roblox (Se omite)")
-end
+if partCount == 0 then table.insert(output, " - Default de Roblox") end
 table.insert(output, "")
 
--- 4. ANIMACIONES (Solo para R15)
+-- 4. ANIMACIONES
 table.insert(output, "[ANIMACIONES]")
 if humanoid.RigType == Enum.HumanoidRigType.R15 then
-    local animations = {
-        ["Inactivo (Idle)"] = description.IdleAnimation,
-        ["Caminar (Walk)"] = description.WalkAnimation,
-        ["Correr (Run)"] = description.RunAnimation,
-        ["Saltar (Jump)"] = description.JumpAnimation,
-        ["Caer (Fall)"] = description.FallAnimation,
-        ["Escalar (Climb)"] = description.ClimbAnimation,
-        ["Nadar (Swim)"] = description.SwimAnimation
-    }
-    local animCount = 0
-
-    for animName, assetId in pairs(animations) do
-        if assetId > 0 then
-            -- LAS ANIMACIONES TAMBIÉN SE VENDEN COMO BUNDLE: Aplicamos el mismo arreglo
-            local realId = getRealId(assetId)
-            local note = (realId ~= assetId) and " (ID de Paquete)" or ""
-            table.insert(output, " - " .. animName .. ": " .. tostring(realId) .. note)
-            animCount = animCount + 1
+    local anims = {["Idle"]=description.IdleAnimation, ["Walk"]=description.WalkAnimation, ["Run"]=description.RunAnimation, ["Jump"]=description.JumpAnimation, ["Fall"]=description.FallAnimation, ["Climb"]=description.ClimbAnimation, ["Swim"]=description.SwimAnimation}
+    for name, id in pairs(anims) do
+        if id > 0 then
+            local bundleId = getBundleId(id)
+            local line = " - " .. name .. ": Asset ID [" .. tostring(id) .. "]"
+            if bundleId then line = line .. " | Bundle ID [" .. tostring(bundleId) .. "]" end
+            table.insert(output, line)
         end
     end
-
-    if animCount == 0 then
-        table.insert(output, " - Default de Roblox (Sin ID custom)")
-    end
 else
-    table.insert(output, " - Omitido (El avatar está utilizando el formato R6)")
+    table.insert(output, " - Omitido (R6)")
 end
 
-table.insert(output, "")
-table.insert(output, "=============================================")
-
--- Unificamos todo el texto
+table.insert(output, "\n=============================================")
 local finalString = table.concat(output, "\n")
-
--- 5. RESULTADOS (Print y Portapapeles)
 print("\n" .. finalString)
 
 if setclipboard then
     setclipboard(finalString)
-    print("✅ ¡La información ha sido copiada! Ya puedes pegarla en tu Bloc de Notas.")
+    print("✅ Información copiada. Formato: Asset ID (Malla) y Bundle ID (Venta).")
 else
-    warn("❌ Tu ejecutor no soporta setclipboard. Cópialo manual desde aquí.")
+    warn("❌ Tu ejecutor no soporta setclipboard.")
 end
