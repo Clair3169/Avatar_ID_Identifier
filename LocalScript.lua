@@ -1,7 +1,6 @@
 -- Esperamos a que el jugador, el personaje y el humanoide estén cargados
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-local AvatarEditorService = game:GetService("AvatarEditorService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -15,12 +14,11 @@ if not description then
     return
 end
 
-print("⏳ Extrayendo información técnica y de venta... por favor espera.")
+print("⏳ Extrayendo información... por favor espera.")
 
--- Función para buscar el ID de venta (Bundle) a partir del ID de Asset
+-- Función para buscar el ID de venta (Bundle)
 local function getBundleId(assetId)
     if not assetId or assetId == 0 then return nil end
-    
     local success, result = pcall(function()
         local url = "https://catalog.roblox.com/v1/assets/" .. tostring(assetId) .. "/bundles"
         local response = game:HttpGet(url)
@@ -61,16 +59,8 @@ table.insert(output, "")
 
 -- 3. PAQUETE DE CUERPO Y CABEZAS 3D
 table.insert(output, "[PARTES DEL CUERPO Y CABEZA]")
+-- CORRECCIÓN: Usamos los nombres correctos de la API de Roblox
 local bodyParts = {
-    ["Cabeza"] = description.Head,
-    ["Torso"] = description.Torso,
-    ["Brazo Izquierdo"] = description.LeftArm,
-    ["Brazo Derecho"] = description.BrazoDerecho, -- Roblox usa LeftArm/RightArm internamente, mantenemos la lógica
-    ["Pierna Izquierda"] = description.LeftLeg,
-    ["Pierna Derecha"] = description.RightLeg
-}
--- Nota: Corregí el nombre de la variable para el brazo derecho a RightArm para que sea preciso
-bodyParts = {
     ["Cabeza"] = description.Head,
     ["Torso"] = description.Torso,
     ["Brazo Izq"] = description.LeftArm,
@@ -116,7 +106,5 @@ print("\n" .. finalString)
 
 if setclipboard then
     setclipboard(finalString)
-    print("✅ Información copiada. Formato: Asset ID (Malla) y Bundle ID (Venta).")
-else
-    warn("❌ Tu ejecutor no soporta setclipboard.")
+    print("✅ Información copiada.")
 end
